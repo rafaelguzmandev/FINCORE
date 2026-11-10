@@ -1,0 +1,39 @@
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# Java / Maven
+**/target/
+.mvn/wrapper/maven-wrapper.jar
+*.class
+hs_err_pid*
+
+# Go
+**/vendor/
+*.exe
+*.test
+*.out
+
+# IDEs
+.idea/
+.vscode/
+*.iml
+*.suo
+*.user
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Docker
+.docker/
