@@ -1,4 +1,4 @@
-SHELL := /bin/sh
+SHELL := /bin/bash
 
 # goose is executed through the Go toolchain so no global install is required.
 # Latest stable v3 release compatible with this module's Go version (go 1.24.1);
@@ -6,15 +6,7 @@ SHELL := /bin/sh
 GOOSE_VERSION ?= v3.26.0
 GOOSE := go run github.com/pressly/goose/v3/cmd/goose@$(GOOSE_VERSION)
 
-ENV_FILE ?= ../../.env
 MIGRATIONS_DIR := migrations
-
-# Load the service environment from the repository root. `tr` strips CR so the
-# file can be authored on Windows without breaking the shell.
-ENV_LOAD = set -a && eval "$$(tr -d '\r' < $(ENV_FILE))" && set +a
-
-# Built from the PAYMENT_DB_* variables at recipe time.
-DATABASE_URL ?= postgres://$${PAYMENT_DB_USER}:$${PAYMENT_DB_PASSWORD}@$${POSTGRES_HOST:-localhost}:$${POSTGRES_PORT:-5432}/$${PAYMENT_DB_NAME}?sslmode=disable
 
 .PHONY: help migrate-up migrate-down migrate-status migrate-new
 
@@ -26,14 +18,25 @@ help:
 	@echo "  migrate-status               Show the status of every migration"
 	@echo "  migrate-new name=<nombre>    Create the next sequential migration"
 
+ifeq ($(OS),Windows_NT)
 migrate-up:
-	$(ENV_LOAD) && $(GOOSE) -dir $(MIGRATIONS_DIR) postgres "$(DATABASE_URL)" up
+	cmd //c "..\..\scripts\migrate-all.bat"
 
 migrate-down:
-	$(ENV_LOAD) && $(GOOSE) -dir $(MIGRATIONS_DIR) postgres "$(DATABASE_URL)" down
+	cmd //c "..\..\scripts\migrate-status.bat"
 
 migrate-status:
-	$(ENV_LOAD) && $(GOOSE) -dir $(MIGRATIONS_DIR) postgres "$(DATABASE_URL)" status
+	cmd //c "..\..\scripts\migrate-status.bat"
+else
+migrate-up:
+	bash ../../scripts/migrate-all.sh
+
+migrate-down:
+	bash ../../scripts/migrate-status.sh
+
+migrate-status:
+	bash ../../scripts/migrate-status.sh
+endif
 
 migrate-new:
 	@test -n "$(name)" || (echo "usage: make migrate-new name=<snake_case_description>" && exit 1)
