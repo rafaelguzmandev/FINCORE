@@ -1,5 +1,13 @@
 name: CI
 
+# CI runs on every pull request and every push to main.
+# Java formatting check: intentionally omitted. Unlike Go (gofmt), Java has no
+# standard formatting tool bundled with the toolchain; introducing a formatter
+# (e.g. Spotless) is deferred until the team adopts one. See docs/conventions.md.
+
+permissions:
+  contents: read
+
 on:
   push:
     branches:
@@ -73,5 +81,83 @@ jobs:
       - name: Grant execute permission for Maven wrapper
         run: chmod +x mvnw
 
-      - name: Compile and Test with Maven
-        run: ./mvnw clean test
+      # verify = compile + test + package: validates that the boot jar builds.
+      - name: Compile, Test and Package with Maven
+        run: ./mvnw clean verify
+
+  migrations:
+    name: Database Migrations (ephemeral PostgreSQL)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: fincore_admin
+          POSTGRES_PASSWORD: local_admin_password
+          POSTGRES_DB: postgres
+          IDENTITY_DB_USER: identity_user
+          IDENTITY_DB_PASSWORD: local_identity_password
+          CORE_BANKING_DB_USER: core_banking_user
+          CORE_BANKING_DB_PASSWORD: local_core_banking_password
+          PAYMENT_DB_USER: payment_user
+          PAYMENT_DB_PASSWORD: local_payment_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fincore_admin -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: '5432'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create environment file
+        run: cp .env.example .env
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          check-latest: true
+
+      - name: Grant execute permission for Maven wrapper
+        run: chmod +x services/*/mvnw
+
+      # Fresh environment: all three databases are created by the init script
+      # and migrated from zero. Verifies FIN-003 acceptance criteria 5, 6 and 9.
+      - name: Apply all migrations (first run)
+        run: bash scripts/migrate-all.sh
+
+      # Re-running must not re-apply anything (FIN-003 acceptance criterion 6).
+      - name: Apply all migrations (second run, must be a no-op)
+        run: bash scripts/migrate-all.sh
+
+      # History tables must exist and record version 1 (FIN-003 criteria 4 and 9).
+      - name: Verify migration history tables
+        run: |
+          NETWORK="${{ job.services.postgres.network }}"
+          echo "== identity_db: flyway_schema_history =="
+          docker run --rm --network "$NETWORK" -e PGPASSWORD=local_identity_password postgres:17 \
+            psql -h postgres -U identity_user -d identity_db -tAc \
+            "SELECT version, description, success FROM flyway_schema_history ORDER BY installed_rank"
+          echo "== core_banking_db: flyway_schema_history =="
+          docker run --rm --network "$NETWORK" -e PGPASSWORD=local_core_banking_password postgres:17 \
+            psql -h postgres -U core_banking_user -d core_banking_db -tAc \
+            "SELECT version, description, success FROM flyway_schema_history ORDER BY installed_rank"
+          echo "== payment_db: goose_db_version =="
+          docker run --rm --network "$NETWORK" -e PGPASSWORD=local_payment_password postgres:17 \
+            psql -h postgres -U payment_user -d payment_db -tAc \
+            "SELECT version_id, is_applied FROM goose_db_version ORDER BY id"

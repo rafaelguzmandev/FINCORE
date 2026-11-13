@@ -3,6 +3,13 @@
 Project-wide conventions for FINCORE. See the service READMEs and
 `docs/specs/` for feature-specific details.
 
+## Code formatting
+
+- Go is formatted with `gofmt` and enforced in CI (`.github/workflows/ci.yml`).
+- Java has no standard formatting tool in the toolchain. CI deliberately does
+  not enforce a Java formatter; if the team adopts one (e.g. Spotless), the
+  check must be added to CI in the same change.
+
 ## Database migrations
 
 Each service owns its schema and its migration history. Migrations live
