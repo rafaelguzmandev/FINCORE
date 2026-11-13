@@ -1,10 +1,11 @@
 SHELL := /bin/bash
 
-# goose is executed through the Go toolchain so no global install is required.
-# Latest stable v3 release compatible with this module's Go version (go 1.24.1);
-# newer releases (v3.27+) require Go 1.25.7 or newer.
-GOOSE_VERSION ?= v3.26.0
-GOOSE := go run github.com/pressly/goose/v3/cmd/goose@$(GOOSE_VERSION)
+# On Windows GNU make executes recipes through Git Bash; on POSIX systems
+# plain bash is used. The migration logic itself lives in migrate.sh.
+ifeq ($(OS),Windows_NT)
+BASH ?= C:/Program Files/Git/bin/bash.exe
+endif
+BASH ?= bash
 
 MIGRATIONS_DIR := migrations
 
@@ -18,26 +19,15 @@ help:
 	@echo "  migrate-status               Show the status of every migration"
 	@echo "  migrate-new name=<nombre>    Create the next sequential migration"
 
-ifeq ($(OS),Windows_NT)
 migrate-up:
-	cmd //c "..\..\scripts\migrate-all.bat"
+	@"$(BASH)" migrate.sh up
 
 migrate-down:
-	cmd //c "..\..\scripts\migrate-status.bat"
+	@"$(BASH)" migrate.sh down
 
 migrate-status:
-	cmd //c "..\..\scripts\migrate-status.bat"
-else
-migrate-up:
-	bash ../../scripts/migrate-all.sh
-
-migrate-down:
-	bash ../../scripts/migrate-status.sh
-
-migrate-status:
-	bash ../../scripts/migrate-status.sh
-endif
+	@"$(BASH)" migrate.sh status
 
 migrate-new:
 	@test -n "$(name)" || (echo "usage: make migrate-new name=<snake_case_description>" && exit 1)
-	$(GOOSE) -s -dir $(MIGRATIONS_DIR) create $(name) sql
+	@"$(BASH)" migrate.sh new $(name)
