@@ -1,30 +1,30 @@
 package com.fincore.identity;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
-import java.util.Map;
-
 import org.junit.jupiter.api.Test;
-import org.springframework.http.ResponseEntity;
-import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.test.web.servlet.MockMvc;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Verifies the health endpoint behavior.
- * <p>
- * Full application startup is verified by {@link IdentityServiceApplicationTests#contextLoads()}
- * using {@link org.springframework.boot.test.context.SpringBootTest}.
+ * Verifies the health endpoint behavior over the real HTTP stack (routing,
+ * JSON serialization). Full application startup is verified by
+ * {@link IdentityServiceApplicationTests#contextLoads()}.
  */
+@WebMvcTest(HealthController.class)
 class HealthControllerTest {
 
+	@Autowired
+	private MockMvc mockMvc;
+
 	@Test
-	void healthEndpointReturnsUp() {
-		HealthController controller = new HealthController();
-		ReflectionTestUtils.setField(controller, "service", "identity-service");
-
-		ResponseEntity<Map<String, String>> response = controller.health();
-
-		assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
-		assertThat(response.getBody().get("status")).isEqualTo("UP");
-		assertThat(response.getBody().get("service")).isEqualTo("identity-service");
+	void healthEndpointReturnsUp() throws Exception {
+		mockMvc.perform(get("/health"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status").value("UP"))
+				.andExpect(jsonPath("$.service").value("identity-service"));
 	}
 }
